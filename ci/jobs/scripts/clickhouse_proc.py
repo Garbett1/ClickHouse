@@ -3,7 +3,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from praktika.utils import Shell, Utils
+from ci.praktika.utils import Shell, Utils
 
 temp_dir = f"{Utils.cwd()}/ci/tmp"
 
@@ -57,6 +57,17 @@ class ClickHouseProc:
                 command, stdout=log_file, stderr=subprocess.STDOUT
             )
         print(f"Started setup_minio.sh asynchronously with PID {process.pid}")
+        return True
+
+    def start_azurite(self):
+        command = (
+            "azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --silent --inMemoryPersistence",
+        )
+        with open("./ci/tmp/azurite.log", "w") as log_file:
+            process = subprocess.Popen(
+                command, stdout=log_file, stderr=subprocess.STDOUT, shell=True
+            )
+        print(f"Started azurite asynchronously with PID {process.pid}")
         return True
 
     @staticmethod
