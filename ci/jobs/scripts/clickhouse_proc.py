@@ -252,11 +252,15 @@ profiles:
         config_file = Path(self.config_path) / "config.d" / "system_logs_export.yaml"
 
         log_export_host = Secret.Config(
-            name="clickhouse_ci_logs_host", type=Secret.Type.AWS_SSM_SECRET
+            name="clickhouse_ci_logs_host",
+            type=Secret.Type.AWS_SSM_VAR,
+            region="us-east-1",
         ).get_value()
 
         log_export_password = Secret.Config(
-            name="clickhouse_ci_logs_password", type=Secret.Type.AWS_SSM_SECRET
+            name="clickhouse_ci_logs_password",
+            type=Secret.Type.AWS_SSM_VAR,
+            region="us-east-1",
         ).get_value()
 
         config_content = LOG_EXPORT_CONFIG_TEMPLATE.format(
@@ -367,3 +371,11 @@ profiles:
         if res:
             print("GDB attached successfully")
         return res
+
+
+if __name__ == "__main__":
+    print(
+        Secret.Config(
+            name="clickhouse_ci_logs_host", type=Secret.Type.AWS_SSM_VAR
+        ).get_value()
+    )

@@ -6,13 +6,6 @@ set -e
 # and their names will contain a hash of the table structure,
 # which allows exporting tables from servers of different versions.
 
-# Config file contains KEY=VALUE pairs with any necessary parameters like:
-# CLICKHOUSE_CI_LOGS_HOST - remote host
-# CLICKHOUSE_CI_LOGS_USER - password for user
-# CLICKHOUSE_CI_LOGS_PASSWORD - password for user
-
-CLICKHOUSE_CI_LOGS_USER=${CLICKHOUSE_CI_LOGS_USER:-ci}
-
 # Pre-configured destination cluster, where to export the data
 CLICKHOUSE_CI_LOGS_CLUSTER=${CLICKHOUSE_CI_LOGS_CLUSTER:-system_logs_export}
 
@@ -28,64 +21,8 @@ EXTRA_COLUMNS_EXPRESSION_TRACE_LOG="${EXTRA_COLUMNS_EXPRESSION}, arrayMap(x -> d
 EXTRA_COLUMNS_COVERAGE_LOG="${EXTRA_COLUMNS} symbols Array(LowCardinality(String)), "
 EXTRA_COLUMNS_EXPRESSION_COVERAGE_LOG="${EXTRA_COLUMNS_EXPRESSION}, arrayDistinct(arrayMap(x -> demangle(addressToSymbol(x)), coverage))::Array(LowCardinality(String)) AS symbols"
 
-
-function __set_connection_args
-{
-    # It's impossible to use a generic $CONNECTION_ARGS string, it's unsafe from word splitting perspective.
-    # That's why we must stick to the generated option
-    CONNECTION_ARGS=(
-        --receive_timeout=45 --send_timeout=45 --secure
-        --user "${CLICKHOUSE_CI_LOGS_USER}" --host "${CLICKHOUSE_CI_LOGS_HOST}"
-        --password "${CLICKHOUSE_CI_LOGS_PASSWORD}"
-    )
-}
-
-function __shadow_credentials
-{
-    # The function completely screws the output, it shouldn't be used in normal functions, only in ()
-    # The only way to substitute the env as a plain text is using perl 's/\Qsomething\E/another/
-    exec &> >(perl -pe '
-        s(\Q$ENV{CLICKHOUSE_CI_LOGS_HOST}\E)[CLICKHOUSE_CI_LOGS_HOST]g;
-        s(\Q$ENV{CLICKHOUSE_CI_LOGS_USER}\E)[CLICKHOUSE_CI_LOGS_USER]g;
-        s(\Q$ENV{CLICKHOUSE_CI_LOGS_PASSWORD}\E)[CLICKHOUSE_CI_LOGS_PASSWORD]g;
-    ')
-}
-
-function check_logs_credentials
-(
-    # The function connects with given credentials, and if it's unable to execute the simplest query, returns exit code
-
-    # First check, if all necessary parameters are set
-    set +x
-    for parameter in CLICKHOUSE_CI_LOGS_HOST CLICKHOUSE_CI_LOGS_USER CLICKHOUSE_CI_LOGS_PASSWORD; do
-      export -p | grep -q "$parameter" || {
-        echo "Credentials parameter $parameter is unset"
-        return 1
-      }
-    done
-
-    __shadow_credentials
-    __set_connection_args
-    local code
-    # Catch both success and error to not fail on `set -e`
-    clickhouse-client "${CONNECTION_ARGS[@]}" -q 'SELECT 1 FORMAT Null' && return 0 || code=$?
-    if [ "$code" != 0 ]; then
-        echo 'Failed to connect to CI Logs cluster'
-        return $code
-    fi
-)
-
 function setup_logs_replication
 (
-    # The function is launched in a separate shell instance to not expose the
-    # exported values
-    set +x
-    # disable output
-    __shadow_credentials
-    echo "Checking if the credentials work"
-    check_logs_credentials || return 0
-    __set_connection_args
-
     echo "My hostname is ${HOSTNAME}"
 
     echo 'Create all configured system logs'
